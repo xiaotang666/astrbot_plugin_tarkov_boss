@@ -1,0 +1,17 @@
+{
+  "default_mode": {
+    "description": "默认游戏模式 (regular/pve)",
+    "type": "string",
+    "default": "regular"
+  },
+  "default_lang": {
+    "description": "默认输出语言 (zh/en)",
+    "type": "string",
+    "default": "zh"
+  },
+  "timeout": {
+    "description": "API请求超时时间(秒)",
+    "type": "int",
+    "default": 15
+  }
+}
