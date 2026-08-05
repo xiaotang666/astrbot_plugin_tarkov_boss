@@ -72,7 +72,7 @@ class TarkovBossPlugin(Star):
                 mode = self._extract_mode(args) or mode
                 data = await self._fetch_maps(mode)
                 if not data:
-                    yield event.plain_result("❌ 获取数据失败，请稍后重试")
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
                     return
                 yield event.plain_result(self._fmt_all(data, mode))
 
@@ -87,7 +87,7 @@ class TarkovBossPlugin(Star):
                     return
                 data = await self._fetch_maps(mode)
                 if not data:
-                    yield event.plain_result("❌ 获取数据失败，请稍后重试")
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
                     return
                 yield event.plain_result(self._fmt_map(data, map_name, mode))
 
@@ -104,7 +104,7 @@ class TarkovBossPlugin(Star):
                     self._fetch_maps(mode), self._fetch_bosses(mode)
                 )
                 if not maps_data:
-                    yield event.plain_result("❌ 获取数据失败，请稍后重试")
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
                     return
                 yield event.plain_result(self._fmt_find(maps_data, bosses_data, boss_name, mode))
 
@@ -143,7 +143,7 @@ class TarkovBossPlugin(Star):
     # ==================== API ====================
 
     async def _fetch_maps(self, mode: str) -> Optional[Dict]:
-        """获取地图+Boss刷新数据"""
+        """获取地图+Boss刷新数据（带缓存兜底）"""
         cache_key = f"maps_{mode}"
         cached = self._cache.get(cache_key)
         if cached and time.time() - cached[0] < self._cache_ttl:
@@ -175,7 +175,12 @@ class TarkovBossPlugin(Star):
         result = await self._gql(query, {"mode": mode})
         if result:
             self._cache[cache_key] = (time.time(), result)
-        return result
+            return result
+        # API失败时返回过期缓存
+        if cached:
+            logger.warning("Tarkov API不可用，使用缓存数据")
+            return cached[1]
+        return None
 
     async def _fetch_bosses(self, mode: str) -> Optional[List]:
         """获取Boss详细信息（血量、装备、物品）"""
@@ -201,6 +206,10 @@ class TarkovBossPlugin(Star):
             boss_list = result["bosses"]
             self._cache[cache_key] = (time.time(), boss_list)
             return boss_list
+        # API失败时返回过期缓存
+        if cached:
+            logger.warning("Tarkov API不可用，使用缓存数据")
+            return cached[1]
         return None
 
     async def _gql(self, query: str, variables: Dict = None) -> Optional[Dict]:
@@ -210,29 +219,44 @@ class TarkovBossPlugin(Star):
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "AstrBot-TarkovBoss/1.2.0",
+            "User-Agent": "AstrBot-TarkovBoss/1.2.2",
         }
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.api_url, json=payload, headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=self.timeout)
-                ) as resp:
-                    body = await resp.text()
-                    if resp.status != 200:
-                        logger.error(f"Tarkov API HTTP {resp.status}: {body[:300]}")
-                        return None
-                    data = json.loads(body)
-                    if "errors" in data:
-                        logger.error(f"Tarkov API错误: {json.dumps(data['errors'], ensure_ascii=False)}")
-                        return None
-                    return data.get("data")
-        except asyncio.TimeoutError:
-            logger.error("Tarkov API超时")
-            return None
-        except Exception as e:
-            logger.error(f"Tarkov API异常: {e}")
-            return None
+        last_err = None
+        for attempt in range(3):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        self.api_url, json=payload, headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=self.timeout)
+                    ) as resp:
+                        body = await resp.text()
+                        if resp.status == 200:
+                            data = json.loads(body)
+                            if "errors" in data:
+                                last_err = json.dumps(data["errors"], ensure_ascii=False)
+                                if "unavailable" in last_err.lower():
+                                    await asyncio.sleep(2)
+                                    continue
+                                logger.error(f"Tarkov API错误: {last_err}")
+                                return None
+                            return data.get("data")
+                        elif resp.status == 422 and "unavailable" in body.lower():
+                            last_err = "API服务暂时不可用"
+                            await asyncio.sleep(2)
+                            continue
+                        else:
+                            logger.error(f"Tarkov API HTTP {resp.status}: {body[:200]}")
+                            return None
+            except asyncio.TimeoutError:
+                last_err = "请求超时"
+                await asyncio.sleep(1)
+                continue
+            except Exception as e:
+                last_err = str(e)
+                await asyncio.sleep(1)
+                continue
+        logger.error(f"Tarkov API重试3次后失败: {last_err}")
+        return None
 
     # ==================== 格式化：全部Boss ====================
 
