@@ -1,6 +1,6 @@
 name: astrbot_plugin_tarkov_boss
 display_name: "塔科夫Boss刷新率查询"
 desc: "查询塔科夫(EFT)各模式Boss刷新率与详情，支持Regular/PvE模式，中英文指令。"
-version: v1.2.2
+version: v1.2.3
 author: xiaotang01
 repo: "https://github.com/xiaotang666/astrbot_plugin_tarkov_boss"
