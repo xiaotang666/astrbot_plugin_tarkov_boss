@@ -9,7 +9,7 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import AstrBotConfig, logger
 
 
-@register("tarkov-boss", "xiaotang666", "查询塔科夫各模式Boss刷新率与详情", "1.2.0")
+@register("tarkov_boss", "xiaotang666", "查询塔科夫各模式Boss刷新率与详情", "1.2.0")
 class TarkovBossPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
