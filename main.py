@@ -16,16 +16,30 @@ from astrbot.api import AstrBotConfig, logger
 # ==================== 中文翻译表 ====================
 
 MAP_TR = {
+    # 英文名 → 中文
     "customs": "海关", "woods": "森林", "lighthouse": "灯塔",
     "shoreline": "海岸线", "reserve": "储备站", "factory": "工厂",
     "interchange": "立交桥", "streets of tarkov": "塔科夫街区",
     "ground zero": "中心区", "the lab": "实验室", "laboratory": "实验室",
-    "terminal": "码头", "bigmap": "海关", "lighthouse": "灯塔",
-    "sandbox": "中心区", "sandbox_high": "中心区(高级)",
-    "tarkovstreets": "塔科夫街区", "laboratory": "实验室",
-    "rezervbase": "储备站", "factory4_night": "工厂(夜间)",
-    "factory4_day": "工厂", "woods": "森林",
-    "interchange": "立交桥", "shoreline": "海岸线",
+    "terminal": "码头", "bigmap": "海关", "sandbox": "中心区",
+    "sandbox_high": "中心区(高级)", "tarkovstreets": "塔科夫街区",
+    "rezervbase": "储备站", "factory4_day": "工厂", "factory4_night": "工厂(夜间)",
+    # MongoDB ID → 中文 (JSON API 地图 ID 映射)
+    "55f2d3fd4bdc2d5f408b4567": "工厂(夜间)",
+    "56f40101d2720b2a4d8b45d6": "海关",
+    "5704e3c2d2720bac5b8b4567": "森林",
+    "5704e4dad2720bb55b8b4567": "灯塔",
+    "5704e554d2720bac5b8b456e": "海岸线",
+    "5704e5fad2720bc05b8b4567": "储备站",
+    "5714dbc024597771384a510d": "立交桥",
+    "5714dc692459777137212e12": "塔科夫街区",
+    "59fc81d786f774390775787e": "工厂",
+    "5b0fc42d86f7744a585f9105": "实验室",
+    "65b8d6f5cdde2479cb2a3125": "中心区",
+    "65cc8f81a9aac3e77d0cfd3e": "码头",
+    "6733700029c367a3d40b02af": "实验室(暗区)",
+    "69af492a4819ea4ba10a69c5": "冰breaker",
+    "6a294a5b5eb5f9a1700417b7": "实验室(暗区)",
 }
 
 BOSS_TR = {
@@ -33,12 +47,13 @@ BOSS_TR = {
     "bosskojaniy": "三枪", "bossboar": "卡班", "bosskolontay": "葛朗台",
     "bossknight": "骑士", "bosszryachiy": "小鹿", "bossgluhar": "大锤",
     "bosssanitar": "蓝色动力装甲", "bossboarsniper": "卡班狙击手",
-    "partisan": "黑老登", "sectantpriest": "邪教祭司", "sectantwarrior": "邪教徒",
+    "partisan": "黑老登", "bosspartisan": "黑老登",
+    "sectantpriest": "邪教祭司", "sectantwarrior": "邪教徒",
     "exusec": "肉鸽", "pmcbot": "PMC", "bossbullyblackdiv": "Re沙拉(黑部门)",
     "bossknightblackdiv": "骑士(黑部门)", "bosswedge": "楔子",
     "bosswedgelab": "楔子(实验室)", "blackdivision": "黑色军团",
     "vsrf": "俄军", "vsrfsniper": "俄军狙击手", "sentry": "哨兵",
-    "bossragillaagro": "Tagilla(狂暴)", "bossbigsentry": "大哨兵",
+    "bosstagillaagro": "Tagilla(狂暴)", "bossbigsentry": "大哨兵",
     "pmcbotblackdiv": "PMC(黑部门)",
 }
 
@@ -50,20 +65,25 @@ PART_TR = {
 
 
 def tr_map(name: str) -> str:
-    """地图名翻译"""
-    return MAP_TR.get(name.lower().strip(), name)
+    """地图名翻译（支持英文名和MongoDB ID）"""
+    key = name.strip()
+    # 先尝试精确匹配（ID）
+    if key in MAP_TR:
+        return MAP_TR[key]
+    # 再尝试小写匹配（英文名）
+    return MAP_TR.get(key.lower(), name)
 
 
 def tr_boss(name: str) -> str:
     """Boss名翻译（支持内部ID和显示名）"""
-    key = name.lower().strip().replace(" ", "")
-    # 先查内部ID
+    key = name.strip()
+    # 先精确匹配
     if key in BOSS_TR:
         return BOSS_TR[key]
-    # 再查显示名
-    for k, v in BOSS_TR.items():
-        if key == v.lower().replace(" ", ""):
-            return v
+    # 再小写匹配
+    key_lower = key.lower().replace(" ", "")
+    if key_lower in BOSS_TR:
+        return BOSS_TR[key_lower]
     return name
 
 
