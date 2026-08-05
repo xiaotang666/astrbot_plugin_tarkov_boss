@@ -262,7 +262,7 @@ class TarkovBossPlugin(Star):
             if not bosses:
                 continue
 
-            map_name = tr_map(map_info.get("name", map_id))
+            map_name = MAP_TR.get(map_id, map_info.get("name", map_id))
             lines.append(f"\n🗺️ {map_name}")
 
             for bs in bosses:
@@ -287,18 +287,18 @@ class TarkovBossPlugin(Star):
         for mid, minfo in maps.items():
             name = minfo.get("name", mid)
             if (q == name.lower().replace(" ", "") or
-                q == tr_map(name).lower().replace(" ", "") or
-                q in tr_map(name).lower().replace(" ", "")):
+                q == MAP_TR.get(mid, name).lower().replace(" ", "") or
+                q in MAP_TR.get(mid, name).lower().replace(" ", "")):
                 target = minfo
                 target_id = mid
                 break
 
         if not target:
-            avail = [tr_map(m.get("name", k)) for k, m in maps.items() if m.get("bosses")]
+            avail = [MAP_TR.get(k, m.get("name", k)) for k, m in maps.items() if m.get("bosses")]
             return f"❌ 未找到地图: {map_name}\n📌 可用: {' / '.join(sorted(set(avail)))}"
 
         mode_cn = "PvE" if mode == "pve" else "普通"
-        map_cn = tr_map(target.get("name", target_id))
+        map_cn = MAP_TR.get(target_id, target.get("name", target_id))
         bosses = target.get("bosses", [])
         lines = [f"🗺️ {map_cn} Boss [{mode_cn}]", "━" * 24]
 
@@ -360,7 +360,7 @@ class TarkovBossPlugin(Star):
                     found_cn = mob_cn
                     found_health = mob.get("health", [])
                     found.append({
-                        "map_cn": tr_map(map_info.get("name", map_id)),
+                        "map_cn": MAP_TR.get(map_id, map_info.get("name", map_id)),
                         "chance": bs.get("spawnChance", 0),
                         "locations": bs.get("spawnLocations", []),
                         "escorts": bs.get("escorts", []),
