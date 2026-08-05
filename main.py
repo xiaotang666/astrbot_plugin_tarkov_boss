@@ -156,7 +156,6 @@ class TarkovBossPlugin(Star):
             normalizedName
             bosses {
               boss {
-                id
                 name
                 normalizedName
               }
@@ -167,10 +166,8 @@ class TarkovBossPlugin(Star):
               }
               escorts {
                 boss { name }
-                amount { count chance }
+                amount { count }
               }
-              spawnTime
-              spawnTimeRandom
             }
           }
         }
@@ -190,20 +187,11 @@ class TarkovBossPlugin(Star):
         query = """
         query($mode: GameMode) {
           bosses(gameMode: $mode) {
-            id
             name
             normalizedName
             health {
               bodyPart
               max
-            }
-            items {
-              name
-              shortName
-              types
-              avg24hPrice
-              lastLowPrice
-              sellFor { priceRUB }
             }
           }
         }
@@ -230,12 +218,13 @@ class TarkovBossPlugin(Star):
                     self.api_url, json=payload, headers=headers,
                     timeout=aiohttp.ClientTimeout(total=self.timeout)
                 ) as resp:
+                    body = await resp.text()
                     if resp.status != 200:
-                        logger.error(f"Tarkov API HTTP {resp.status}")
+                        logger.error(f"Tarkov API HTTP {resp.status}: {body[:300]}")
                         return None
-                    data = await resp.json()
+                    data = json.loads(body)
                     if "errors" in data:
-                        logger.error(f"Tarkov API错误: {data['errors']}")
+                        logger.error(f"Tarkov API错误: {json.dumps(data['errors'], ensure_ascii=False)}")
                         return None
                     return data.get("data")
         except asyncio.TimeoutError:
@@ -343,13 +332,13 @@ class TarkovBossPlugin(Star):
         # 从地图数据中找Boss出现信息
         found_maps = []
         found_boss_cn = None
-        found_boss_id = None
+        found_boss_name = None
         for m in maps:
             for bs in m.get("bosses", []):
                 b = bs.get("boss", {})
                 if self._match_boss(b, boss_name_lower):
                     found_boss_cn = self._tr_boss(b["name"])
-                    found_boss_id = b.get("id")
+                    found_boss_name = b.get("name")
                     found_maps.append({
                         "map_cn": self._tr_map(m["name"]),
                         "chance": bs.get("spawnChance", 0),
@@ -370,9 +359,9 @@ class TarkovBossPlugin(Star):
 
         # 如果有boss详细数据，显示血量和掉落
         boss_detail = None
-        if bosses_data and found_boss_id:
+        if bosses_data and found_boss_name:
             for b in bosses_data:
-                if b.get("id") == found_boss_id:
+                if b.get("name") == found_boss_name:
                     boss_detail = b
                     break
 
@@ -391,24 +380,7 @@ class TarkovBossPlugin(Star):
                 lines.append(f"❤️ 总血量: {total_hp}")
                 lines.append(f"   {' | '.join(hp_parts)}")
 
-            # 掉落物品
-            items = boss_detail.get("items", [])
-            if items:
-                # 分类：战局专属(noFlea) vs 普通
-                no_flea = []
-                normal = []
-                for item in items:
-                    types = item.get("types", [])
-                    name = item.get("name", "")
-                    if "noFlea" in types:
-                        no_flea.append(name)
-                    else:
-                        normal.append(name)
 
-                if no_flea:
-                    lines.append(f"💎 战局专属: {', '.join(no_flea[:10])}")
-                if normal:
-                    lines.append(f"🎒 普通掉落: {', '.join(normal[:10])}")
 
         # 地图刷新信息
         lines.append("")
