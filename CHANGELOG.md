@@ -1,40 +1,46 @@
 # 更新日志
 
+## v1.2.5 (2026-08-05)
+
+### 修复
+- 地图名改用 MongoDB ID 映射，不再依赖 API 的 name 字段
+- 补全 Boss 翻译：bosspartisan→黑老登、bosstagillaagro→Tagilla(狂暴)
+- 修复 tr_map/tr_boss 查找逻辑（先精确匹配 ID，再小写匹配）
+
+## v1.2.4 (2026-08-05)
+
+### 修复
+- 切换到 json.tarkov.dev REST API（GraphQL 已停服）
+- 添加中英文翻译映射表
+- metadata.yaml 补全 display_name/repo 字段
+
+## v1.2.3 (2026-08-05)
+
+### 修复
+- 增加 API 重试机制（3次）和缓存兜底
+
+## v1.2.2 (2026-08-05)
+
+### 修复
+- 简化 GraphQL 查询修复 422 错误
+
 ## v1.2.1 (2026-08-04)
 
 ### 修复
-- metadata.yaml name 从 `tarkov-boss` 改为 `tarkov_boss`（合法Python标识符）
-- @register name 同步修改，与 metadata.yaml 保持一致
-
+- metadata.yaml name 从 tarkov-boss 改为 tarkov_boss
 
 ## v1.2.0 (2026-08-04)
 
 ### 新增
-- Boss详情查询：血量（按部位）、掉落物品、战局专属物品
-- 出生时间信息（开局即刷 / 延迟秒数）
-- 从API获取Boss详细数据（bosses查询）
-- tfind指令现显示完整Boss档案
-
-### 移除
-- 移除 thelp 帮助指令（由其他插件替代）
-
-### 优化
-- 分离地图查询和Boss查询的API缓存
-- 地图模糊匹配改进（去除空格比较）
+- Boss 详情查询（血量、掉落、出现地图）
+- 移除 thelp 帮助指令
 
 ## v1.1.0 (2026-08-04)
 
 ### 新增
-- 支持 PvE 和 Regular 两种游戏模式查询
-- 新增 tmode 指令设置默认模式
-- 显示Boss刷新点位置和护卫信息
-- 5分钟API缓存
+- 支持 PvE/Regular 模式
+- tmode 指令设置默认模式
 
-### 修复
-- 修复GraphQL查询结构（boss { name } 替代 name）
-- 修复422状态码错误
+## v1.0.0 (2026-08-04)
 
-## v1.0.0 (初始版本)
-
-- 基础Boss刷新率查询
-- 中英文地图/Boss名翻译
+- 初始版本
