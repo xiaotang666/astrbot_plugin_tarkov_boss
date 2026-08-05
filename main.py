@@ -9,39 +9,35 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api import AstrBotConfig, logger
 
 
-@register("tarkov_boss", "xiaotang666", "查询塔科夫各模式Boss刷新率与详情", "1.2.1")
+@register("tarkov_boss", "xiaotang01", "查询塔科夫各模式Boss刷新率与详情", "1.2.3")
 class TarkovBossPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self._config = dict(config)
-        self.api_url = "https://api.tarkov.dev/graphql"
+        self.api_url = "https://json.tarkov.dev"
         self.timeout = self._config.get("timeout", 15)
         self._cache = {}
-        self._cache_ttl = 300  # 5分钟缓存
+        self._cache_ttl = 300
 
     # ==================== 指令 ====================
 
     @filter.command("tboss", alias=["boss", "boss查询", "boss刷率", "查boss", "查刷率"])
     async def cmd_boss_all(self, event: AstrMessageEvent, args: str = ""):
-        """查询所有Boss刷新率"""
         async for r in self._handle(event, args, "all"):
             yield r
 
     @filter.command("tmap", alias=["map", "地图boss", "地图查询", "查地图"])
     async def cmd_boss_map(self, event: AstrMessageEvent, args: str = ""):
-        """查询指定地图的Boss"""
         async for r in self._handle(event, args, "map"):
             yield r
 
     @filter.command("tfind", alias=["find", "找boss", "boss在哪", "查具体boss"])
     async def cmd_boss_find(self, event: AstrMessageEvent, args: str = ""):
-        """查询特定Boss详情"""
         async for r in self._handle(event, args, "find"):
             yield r
 
     @filter.command("tmode", alias=["mode", "模式", "切换模式", "t模式"])
     async def cmd_mode(self, event: AstrMessageEvent, args: str = ""):
-        """设置默认游戏模式"""
         args = args.strip().lower()
         mode_map = {
             "regular": "regular", "普通": "regular", "pvp": "regular",
@@ -72,7 +68,7 @@ class TarkovBossPlugin(Star):
                 mode = self._extract_mode(args) or mode
                 data = await self._fetch_maps(mode)
                 if not data:
-                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试")
                     return
                 yield event.plain_result(self._fmt_all(data, mode))
 
@@ -87,7 +83,7 @@ class TarkovBossPlugin(Star):
                     return
                 data = await self._fetch_maps(mode)
                 if not data:
-                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试")
                     return
                 yield event.plain_result(self._fmt_map(data, map_name, mode))
 
@@ -100,13 +96,11 @@ class TarkovBossPlugin(Star):
                         "📖 大锤/三枪/Re沙拉/Killa/蓝色动力装甲/卡班/葛朗台/黑老登/小鹿"
                     )
                     return
-                maps_data, bosses_data = await asyncio.gather(
-                    self._fetch_maps(mode), self._fetch_bosses(mode)
-                )
-                if not maps_data:
-                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试\n📌 数据来源: tarkov.dev (社区API可能临时维护)")
+                data = await self._fetch_maps(mode)
+                if not data:
+                    yield event.plain_result("❌ Tarkov API暂时不可用，请稍后再试")
                     return
-                yield event.plain_result(self._fmt_find(maps_data, bosses_data, boss_name, mode))
+                yield event.plain_result(self._fmt_find(data, boss_name, mode))
 
         except Exception as e:
             logger.error(f"TarkovBoss异常: {e}")
@@ -143,110 +137,33 @@ class TarkovBossPlugin(Star):
     # ==================== API ====================
 
     async def _fetch_maps(self, mode: str) -> Optional[Dict]:
-        """获取地图+Boss刷新数据（带缓存兜底）"""
+        """从 JSON REST API 获取地图和Boss数据"""
         cache_key = f"maps_{mode}"
         cached = self._cache.get(cache_key)
         if cached and time.time() - cached[0] < self._cache_ttl:
             return cached[1]
 
-        query = """
-        query($mode: GameMode) {
-          maps(gameMode: $mode) {
-            name
-            normalizedName
-            bosses {
-              boss {
-                name
-                normalizedName
-              }
-              spawnChance
-              spawnLocations {
-                name
-                chance
-              }
-              escorts {
-                boss { name }
-                amount { count }
-              }
-            }
-          }
-        }
-        """
-        result = await self._gql(query, {"mode": mode})
-        if result:
-            self._cache[cache_key] = (time.time(), result)
-            return result
-        # API失败时返回过期缓存
-        if cached:
-            logger.warning("Tarkov API不可用，使用缓存数据")
-            return cached[1]
-        return None
-
-    async def _fetch_bosses(self, mode: str) -> Optional[List]:
-        """获取Boss详细信息（血量、装备、物品）"""
-        cache_key = f"bosses_{mode}"
-        cached = self._cache.get(cache_key)
-        if cached and time.time() - cached[0] < self._cache_ttl:
-            return cached[1]
-
-        query = """
-        query($mode: GameMode) {
-          bosses(gameMode: $mode) {
-            name
-            normalizedName
-            health {
-              bodyPart
-              max
-            }
-          }
-        }
-        """
-        result = await self._gql(query, {"mode": mode})
-        if result and "bosses" in result:
-            boss_list = result["bosses"]
-            self._cache[cache_key] = (time.time(), boss_list)
-            return boss_list
-        # API失败时返回过期缓存
-        if cached:
-            logger.warning("Tarkov API不可用，使用缓存数据")
-            return cached[1]
-        return None
-
-    async def _gql(self, query: str, variables: Dict = None) -> Optional[Dict]:
-        payload = {"query": query}
-        if variables:
-            payload["variables"] = variables
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "AstrBot-TarkovBoss/1.2.2",
-        }
+        url = f"{self.api_url}/{mode}/maps"
+        headers = {"Accept": "application/json", "User-Agent": "AstrBot-TarkovBoss/1.2.3"}
         last_err = None
+
         for attempt in range(3):
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        self.api_url, json=payload, headers=headers,
+                    async with session.get(
+                        url, headers=headers,
                         timeout=aiohttp.ClientTimeout(total=self.timeout)
                     ) as resp:
                         body = await resp.text()
                         if resp.status == 200:
-                            data = json.loads(body)
-                            if "errors" in data:
-                                last_err = json.dumps(data["errors"], ensure_ascii=False)
-                                if "unavailable" in last_err.lower():
-                                    await asyncio.sleep(2)
-                                    continue
-                                logger.error(f"Tarkov API错误: {last_err}")
-                                return None
-                            return data.get("data")
-                        elif resp.status == 422 and "unavailable" in body.lower():
-                            last_err = "API服务暂时不可用"
+                            raw = json.loads(body)
+                            result = raw.get("data", raw)
+                            self._cache[cache_key] = (time.time(), result)
+                            return result
+                        else:
+                            last_err = f"HTTP {resp.status}: {body[:200]}"
                             await asyncio.sleep(2)
                             continue
-                        else:
-                            logger.error(f"Tarkov API HTTP {resp.status}: {body[:200]}")
-                            return None
             except asyncio.TimeoutError:
                 last_err = "请求超时"
                 await asyncio.sleep(1)
@@ -255,13 +172,45 @@ class TarkovBossPlugin(Star):
                 last_err = str(e)
                 await asyncio.sleep(1)
                 continue
-        logger.error(f"Tarkov API重试3次后失败: {last_err}")
+
+        logger.error(f"Tarkov API重试3次失败: {last_err}")
+        if cached:
+            logger.warning("使用缓存数据")
+            return cached[1]
         return None
 
-    # ==================== 格式化：全部Boss ====================
+    # ==================== 数据处理 ====================
+
+    def _get_maps_list(self, data: Dict) -> List[Dict]:
+        """将 API 返回的 maps dict 转为 list，并关联 mob 数据"""
+        maps_raw = data.get("maps", {})
+        mobs_raw = data.get("mobs", {})
+
+        if isinstance(maps_raw, list):
+            return maps_raw
+
+        maps = []
+        for map_id, map_data in maps_raw.items():
+            map_data["_id"] = map_id
+            # 关联 boss 的 mob 信息
+            for boss in map_data.get("bosses", []):
+                mob_id = boss.get("mob", "")
+                mob = mobs_raw.get(mob_id, {})
+                boss["_mob_name"] = mob.get("name", mob_id)
+                boss["_mob_normalized"] = mob.get("normalizedName", "")
+                boss["_mob_health"] = mob.get("health", [])
+                # 关联 escort 的 mob 信息
+                for escort in boss.get("escorts", []):
+                    e_mob_id = escort.get("mob", "")
+                    e_mob = mobs_raw.get(e_mob_id, {})
+                    escort["_mob_name"] = e_mob.get("name", e_mob_id)
+            maps.append(map_data)
+        return maps
+
+    # ==================== 格式化 ====================
 
     def _fmt_all(self, data: Dict, mode: str) -> str:
-        maps = data.get("maps", [])
+        maps = self._get_maps_list(data)
         if not maps:
             return "❌ 没有获取到地图数据"
         mode_cn = "PvE" if mode == "pve" else "普通"
@@ -270,41 +219,39 @@ class TarkovBossPlugin(Star):
             bosses = m.get("bosses", [])
             if not bosses:
                 continue
-            lines.append(f"\n🗺️ {self._tr_map(m['name'])}")
-            for bs in sorted(bosses, key=lambda x: x.get("boss", {}).get("name", "")):
-                cn = self._tr_boss(bs["boss"]["name"])
+            map_cn = self._tr_map(m.get("name", ""))
+            lines.append(f"\n🗺️ {map_cn}")
+            for bs in sorted(bosses, key=lambda x: x.get("_mob_name", "")):
+                cn = self._tr_boss(bs.get("_mob_name", ""))
                 pct = bs.get("spawnChance", 0) * 100
                 lines.append(f"  👾 {cn}: {pct:.0f}%")
         lines.append("\n" + "━" * 24)
-        lines.append("📌 数据来源: tarkov.dev API")
+        lines.append("📌 数据来源: tarkov.dev JSON API")
         return "\n".join(lines)
 
-    # ==================== 格式化：地图Boss ====================
-
     def _fmt_map(self, data: Dict, map_name: str, mode: str) -> str:
-        maps = data.get("maps", [])
+        maps = self._get_maps_list(data)
         if not maps:
             return "❌ 没有获取到地图数据"
 
         target = self._find_map(maps, map_name)
         if not target:
-            avail = [self._tr_map(m["name"]) for m in maps if m.get("bosses")]
+            avail = [self._tr_map(m.get("name", "")) for m in maps if m.get("bosses")]
             return f"❌ 未找到地图: {map_name}\n📌 可用: {' / '.join(avail)}"
 
         mode_cn = "PvE" if mode == "pve" else "普通"
-        map_cn = self._tr_map(target["name"])
+        map_cn = self._tr_map(target.get("name", ""))
         bosses = target.get("bosses", [])
         lines = [f"🗺️ {map_cn} Boss [{mode_cn}]", "━" * 24]
 
         if not bosses:
             lines.append("  该地图无Boss刷新")
         else:
-            for bs in sorted(bosses, key=lambda x: x.get("boss", {}).get("name", "")):
-                cn = self._tr_boss(bs["boss"]["name"])
+            for bs in sorted(bosses, key=lambda x: x.get("_mob_name", "")):
+                cn = self._tr_boss(bs.get("_mob_name", ""))
                 pct = bs.get("spawnChance", 0) * 100
                 line = f"👾 {cn}: {pct:.0f}%"
 
-                # 刷新点
                 locs = bs.get("spawnLocations", [])
                 if locs:
                     parts = []
@@ -316,97 +263,71 @@ class TarkovBossPlugin(Star):
                     if parts:
                         line += f"\n   📍 {', '.join(parts)}"
 
-                # 护卫
                 escorts = bs.get("escorts", [])
                 if escorts:
                     e_parts = []
                     for e in escorts:
-                        en = self._tr_boss(e["boss"]["name"])
+                        en = self._tr_boss(e.get("_mob_name", ""))
                         amts = e.get("amount", [])
                         if amts:
-                            e_parts.append(f"{en}x{amts[0]['count']}")
+                            e_parts.append(f"{en}x{amts[0].get('count', 1)}")
                     if e_parts:
                         line += f"\n   🛡️ {', '.join(e_parts)}"
-
-                # 出生时间
-                st = bs.get("spawnTime")
-                if st is not None:
-                    if st == -1:
-                        line += "\n   🕐 开局即刷"
-                    else:
-                        rnd = "随机" if bs.get("spawnTimeRandom") else ""
-                        line += f"\n   🕐 {st}秒{rnd}"
 
                 lines.append(line)
 
         lines.append("\n" + "━" * 24)
-        lines.append("📌 数据来源: tarkov.dev API")
+        lines.append("📌 数据来源: tarkov.dev JSON API")
         return "\n".join(lines)
 
-    # ==================== 格式化：Boss详情 ====================
-
-    def _fmt_find(self, maps_data: Dict, bosses_data: Optional[List], boss_name: str, mode: str) -> str:
-        maps = maps_data.get("maps", [])
+    def _fmt_find(self, data: Dict, boss_name: str, mode: str) -> str:
+        maps = self._get_maps_list(data)
         if not maps:
             return "❌ 没有获取到地图数据"
 
         mode_cn = "PvE" if mode == "pve" else "普通"
         boss_name_lower = boss_name.lower().strip()
 
-        # 从地图数据中找Boss出现信息
         found_maps = []
         found_boss_cn = None
-        found_boss_name = None
+        found_boss_health = []
+
         for m in maps:
             for bs in m.get("bosses", []):
-                b = bs.get("boss", {})
-                if self._match_boss(b, boss_name_lower):
-                    found_boss_cn = self._tr_boss(b["name"])
-                    found_boss_name = b.get("name")
+                mob_name = bs.get("_mob_name", "")
+                mob_norm = bs.get("_mob_normalized", "")
+                if self._match(mob_name, mob_norm, boss_name_lower):
+                    found_boss_cn = self._tr_boss(mob_name)
+                    found_boss_health = bs.get("_mob_health", [])
                     found_maps.append({
-                        "map_cn": self._tr_map(m["name"]),
+                        "map_cn": self._tr_map(m.get("name", "")),
                         "chance": bs.get("spawnChance", 0),
                         "locations": bs.get("spawnLocations", []),
                         "escorts": bs.get("escorts", []),
-                        "spawnTime": bs.get("spawnTime"),
-                        "spawnTimeRandom": bs.get("spawnTimeRandom"),
                     })
 
         if not found_maps:
             all_bosses = set()
             for m in maps:
                 for bs in m.get("bosses", []):
-                    all_bosses.add(self._tr_boss(bs["boss"]["name"]))
+                    all_bosses.add(self._tr_boss(bs.get("_mob_name", "")))
             return f"❌ 未找到Boss: {boss_name}\n📌 可用: {' / '.join(sorted(all_bosses))}"
 
         lines = [f"🔍 {found_boss_cn} [{mode_cn}]", "━" * 24]
 
-        # 如果有boss详细数据，显示血量和掉落
-        boss_detail = None
-        if bosses_data and found_boss_name:
-            for b in bosses_data:
-                if b.get("name") == found_boss_name:
-                    boss_detail = b
-                    break
+        # 血量信息
+        if found_boss_health:
+            hp_parts = []
+            total_hp = 0
+            for hp in found_boss_health:
+                part = hp.get("bodyPart", "")
+                val = hp.get("max", 0)
+                total_hp += val
+                hp_parts.append(f"{self._tr_body_part(part)}{val}")
+            lines.append(f"❤️ 总血量: {total_hp}")
+            lines.append(f"   {' | '.join(hp_parts)}")
 
-        if boss_detail:
-            # 血量信息
-            health = boss_detail.get("health", [])
-            if health:
-                hp_parts = []
-                total_hp = 0
-                for hp in health:
-                    part = hp.get("bodyPart", "")
-                    val = hp.get("max", 0)
-                    total_hp += val
-                    part_cn = self._tr_body_part(part)
-                    hp_parts.append(f"{part_cn}{val}")
-                lines.append(f"❤️ 总血量: {total_hp}")
-                lines.append(f"   {' | '.join(hp_parts)}")
-
-
-
-        # 地图刷新信息
+        # 地图信息
         lines.append("")
         for entry in found_maps:
             pct = entry["chance"] * 100
@@ -427,25 +348,17 @@ class TarkovBossPlugin(Star):
             if escorts:
                 e_parts = []
                 for e in escorts:
-                    en = self._tr_boss(e["boss"]["name"])
+                    en = self._tr_boss(e.get("_mob_name", ""))
                     amts = e.get("amount", [])
                     if amts:
-                        e_parts.append(f"{en}x{amts[0]['count']}")
+                        e_parts.append(f"{en}x{amts[0].get('count', 1)}")
                 if e_parts:
                     line += f"\n   🛡️ {', '.join(e_parts)}"
-
-            st = entry.get("spawnTime")
-            if st is not None:
-                if st == -1:
-                    line += "\n   🕐 开局即刷"
-                else:
-                    rnd = "随机" if entry.get("spawnTimeRandom") else ""
-                    line += f"\n   🕐 {st}秒{rnd}"
 
             lines.append(line)
 
         lines.append("\n" + "━" * 24)
-        lines.append("📌 数据来源: tarkov.dev API")
+        lines.append("📌 数据来源: tarkov.dev JSON API")
         return "\n".join(lines)
 
     # ==================== 工具函数 ====================
@@ -460,13 +373,12 @@ class TarkovBossPlugin(Star):
                 return m
         return None
 
-    def _match_boss(self, boss: Dict, query: str) -> bool:
-        en = boss.get("name", "").lower()
-        norm = boss.get("normalizedName", "").lower()
-        cn = self._tr_boss(boss.get("name", "")).lower()
+    def _match(self, mob_name: str, mob_norm: str, query: str) -> bool:
         q = query.replace(" ", "")
-        return (q == en.replace(" ", "") or q == norm.replace(" ", "") or
-                q in cn or q == cn)
+        cn = self._tr_boss(mob_name).lower().replace(" ", "")
+        return (q == mob_name.lower().replace(" ", "") or
+                q == mob_norm.lower().replace(" ", "") or
+                q == cn or q in cn)
 
     def _tr_map(self, name: str) -> str:
         t = {
