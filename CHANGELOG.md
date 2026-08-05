@@ -1,5 +1,12 @@
 # 更新日志
 
+## v1.2.1 (2026-08-04)
+
+### 修复
+- metadata.yaml name 从 `tarkov-boss` 改为 `tarkov_boss`（合法Python标识符）
+- @register name 同步修改，与 metadata.yaml 保持一致
+
+
 ## v1.2.0 (2026-08-04)
 
 ### 新增
